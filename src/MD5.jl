@@ -24,22 +24,20 @@ state_type(::Type{MD5_CTX}) = UInt32
 blocklen(::Type{MD5_CTX}) = UInt64(64)
 
 const MD5_initial_hash_value = UInt32[
-                                      0x67452301,   # A
-                                      0xefcdab89,   # B
-                                      0x98badcfe,   # C
-                                      0x10325476,   # D
-                                     ]
+    0x67452301,
+    0xefcdab89,
+    0x98badcfe,
+    0x10325476,]
 
-const s = UInt32[
- 7, 12, 17, 22,  7, 12, 17, 22,  7, 12, 17, 22,  7, 12, 17, 22,
-  5,  9, 14, 20,  5,  9, 14, 20,  5,  9, 14, 20,  5,  9, 14, 20,
-   4, 11, 16, 23,  4, 11, 16, 23,  4, 11, 16, 23,  4, 11, 16, 23, 
-    6, 10, 15, 21,  6, 10, 15, 21,  6, 10, 15, 21,  6, 10, 15, 21, 
-    ]
+const S_MD5 = UInt32[
+    7, 12, 17, 22,  7, 12, 17, 22,  7, 12, 17, 22,  7, 12, 17, 22,
+    5,  9, 14, 20,  5,  9, 14, 20,  5,  9, 14, 20,  5,  9, 14, 20,
+    4, 11, 16, 23,  4, 11, 16, 23,  4, 11, 16, 23,  4, 11, 16, 23,
+    6, 10, 15, 21,  6, 10, 15, 21,  6, 10, 15, 21,  6, 10, 15, 21,]
 
-@assert length(s) == 64
-@assert s[33] == 4
-@assert last(s) == 21
+@assert length(S_MD5) == 64
+@assert S_MD5[33] == 4
+@assert last(S_MD5) == 21
 
 MD5_CTX() = MD5_CTX(copy(MD5_initial_hash_value), 0, zeros(UInt8, blocklen(MD5_CTX)),
                     zeros(UInt32,16))
@@ -53,7 +51,64 @@ const K_MD5 = UInt32[floor(UInt32, 2^32 * abs(sin(i))) for i in 1:64]
 @assert last(K_MD5) == 0xeb86d391
 @assert K_MD5[29] == 0xa9e3e905
 
-transform!(ctx::MD5_CTX) = transform_baseline!(ctx)
+# transform!(ctx::MD5_CTX) = transform_baseline!(ctx)
+transform!(ctx::MD5_CTX) = transform_unrolled!(ctx)
+
+@generated function transform_unrolled!(context::MD5_CTX)
+    ret = quote
+        pbuf = Ptr{UInt32}(pointer(context.buffer))
+        M = context.M
+    end
+    for i in 1:16
+        ex = :(M[$i] = unsafe_load(pbuf,$i))
+        push!(ret.args, ex)
+    end
+    ex  = quote
+        A = context.state[1]
+        B = context.state[2]
+        C = context.state[3]
+        D = context.state[4]
+    end
+    push!(ret.args, ex)
+    for i in 0:63
+        if 0 ≤ i ≤ 15
+            ex = :(F = (B & C) | ((~B) & D))
+            g = i
+        elseif 16 ≤ i ≤ 31
+            ex = :(F = (D & B) | ((~D) & C))
+            g = 5i + 1
+        elseif 32 ≤ i ≤ 47
+            ex = :(F = B ⊻ C ⊻ D)
+            g = 3i + 5
+        elseif 48 ≤ i ≤ 63
+            ex = :(F = C ⊻ (B | (~D)))
+            g = 7i
+        end
+        push!(ret.args, ex)
+        g = (g % 16) + 1
+        ex = quote
+            temp = D
+            D = C
+            C = B
+            inner = A + F + $(K_MD5[i+1]) + M[$g]
+            rot_inner = lrot($(S_MD5[i+1]), inner, 32)
+            B = B + rot_inner
+            A = temp
+        end
+        push!(ret.args, ex)
+    end
+
+    ex = quote
+        context.state[1] += A
+        context.state[2] += B
+        context.state[3] += C
+        context.state[4] += D
+    end
+    push!(ret.args, ex)
+    quote
+        @inbounds $ret
+    end
+end
 
 function transform_baseline!(context::MD5_CTX)
     pbuf = Ptr{UInt32}(pointer(context.buffer))
@@ -84,7 +139,7 @@ function transform_baseline!(context::MD5_CTX)
         D = C
         C = B
         inner = A + F + K_MD5[i+1] + context.M[g+1]
-        rot_inner = lrot(s[i+1], inner, 32)
+        rot_inner = lrot(S_MD5[i+1], inner, 32)
         B = B + rot_inner
         A = temp
     end
