@@ -1,1 +1,51 @@
 # MD5
+
+Pure Julia implementation of MD5 hash algorithm. Inspired by 
+[SHA.jl](https://github.com/staticfloat/SHA.jl/blob/master/src/common.jl).
+
+AT THIS POINT USES A LOT OF COPY PASTED CODE FROM SHA.jl
+
+## Usage
+
+```julia
+julia> using MD5
+INFO: Recompiling stale cache file /home/jan/.julia/lib/v0.6/MD5.ji for module MD5.
+
+julia> md5("")
+16-element Array{UInt8,1}:
+ 0xd4
+ 0x1d
+ 0x8c
+ 0xd9
+ 0x8f
+ 0x00
+ 0xb2
+ 0x04
+ 0xe9
+ 0x80
+ 0x09
+ 0x98
+ 0xec
+ 0xf8
+ 0x42
+ 0x7e
+
+julia> md5("some string")
+16-element Array{UInt8,1}:
+ 0x5a
+ 0xc7
+ 0x49
+ 0xfb
+ 0xee
+ 0xc9
+ 0x36
+ 0x07
+ 0xfc
+ 0x28
+ 0xd6
+ 0x66
+ 0xbe
+ 0x85
+ 0xe7
+ 0x3a
+```
